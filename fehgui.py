@@ -4,6 +4,7 @@ import sys
 from os.path import basename
 from hashlib import md5
 import subprocess
+import argparse
 from PyQt5 import QtCore, QtWidgets, QtGui
 
 class ScreensScene(QtWidgets.QGraphicsScene):
@@ -32,6 +33,13 @@ class ScreenItem(QtWidgets.QGraphicsRectItem):
         self.setPen(QtGui.QPen(QtGui.QColor("red")))
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsFocusable | QtWidgets.QGraphicsItem.ItemIsSelectable)
         self.path = path
+
+    def geometry(self):
+        r = self.orig_rect
+        return f"{int(r.width())}x{int(r.height())}+{int(r.x())}+{int(r.y())}"
+    
+    def tostring(self):
+        return f"{self.number}: {self.geometry()}"
 
     def mousePressEvent(self, ev):
         super().mousePressEvent(ev)
@@ -71,6 +79,8 @@ class Config:
     def screens_hash(screens=None):
         if screens is None:
             screens = get_screens()
+        if not screens:
+            return "___EMPTY___"
         s = ""
         for i, screen in enumerate(screens):
             s = s + f"screen {i}: {screen.orig_rect}"
@@ -103,6 +113,8 @@ class Config:
         cfg.id = id
         section = f"config_{id}"
         cfg.name = settings.value(f"{section}/name")
+        if not cfg.name:
+            return None
         n_screens = settings.beginReadArray(f"{section}/screens")
         screens = []
         paths = []
@@ -122,6 +134,17 @@ class Config:
             screen.path = path
         return cfg
     
+    @staticmethod
+    def list_from_settings(settings):
+        prefix = "config_"
+        prefix_len = len(prefix)
+        for key in settings.childGroups():
+            if not key.startswith(prefix):
+                continue
+            id = key[prefix_len:]
+            config = Config.from_settings(settings, id)
+            yield config
+    
     def save(self, settings):
         section = f"config_{self.id}"
         settings.setValue(f"{section}/name", self.name)
@@ -135,6 +158,14 @@ class Config:
             settings.setValue("path", screen.path)
             print(f"W: {screen.number} => {screen.path}")
         settings.endArray()
+
+    def apply(self):
+        screens = sorted(self.screens, key = lambda s: s.number)
+        paths = ["\""+s.path+"\"" for s in screens if s.path is not None]
+        all_paths = " ".join(paths)
+        command = f"feh --bg-scale {all_paths}"
+        print(command)
+        subprocess.call(command, shell=True)
 
 class GUI(QtWidgets.QMainWindow):
     def __init__(self):
@@ -196,12 +227,7 @@ class GUI(QtWidgets.QMainWindow):
         self._on_select_image(path)
 
     def _on_apply(self, button):
-        screens = sorted(self.selected_config.screens, key = lambda s: s.number)
-        paths = ["\""+s.path+"\"" for s in screens if s.path is not None]
-        all_paths = " ".join(paths)
-        command = f"feh --bg-scale {all_paths}"
-        print(command)
-        subprocess.call(command, shell=True)
+        self.selected_config.apply()
 
     def get_current_config(self):
         return Config.current_from_settings(self.settings)
@@ -232,9 +258,39 @@ class GUI(QtWidgets.QMainWindow):
             self.selected_screen_label.setText("")
             self.selected_screen_id = None
 
-if __name__ == "__main__":
-    app = QtWidgets.QApplication([])
+def launch_gui():
+    app = QtWidgets.QApplication(sys.argv)
     win = GUI()
     win.show()
     sys.exit(app.exec_())
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(prog="fehgui", description="Manipulate wallpapers in multimonitor configurations using feh")
+    subparsers = parser.add_subparsers(title="Action to be executed", dest="command")
+    parser_apply = subparsers.add_parser("apply", help="Apply wallpapers from saved configuration")
+    parser_apply.add_argument('-i', '--id', metavar="ID", help="Apply wallpapers from specified configuration")
+    parser_list = subparsers.add_parser("list", help="List existing configurations")
+    parser_gui = subparsers.add_parser("gui", help="Launch GUI to configure wallpapers (default)")
+
+    args = parser.parse_args()
+    if args.command is None or args.command == "gui":
+        launch_gui()
+    elif args.command == "apply":
+        app = QtWidgets.QApplication(sys.argv)
+        settings = QtCore.QSettings("fehgui", "fehgui")
+        if args.id is None:
+            config = Config.current_from_settings(settings)
+        else:
+            config = Config.from_settings(settings, args.id)
+            if config is None:
+                print(f"No configuration with such ID: {args.id}")
+                sys.exit(1)
+        config.apply()
+    elif args.command == "list":
+        settings = QtCore.QSettings("fehgui", "fehgui")
+        for config in Config.list_from_settings(settings):
+            print(f"Configuration: ID = {config.id}, name = {config.name}")
+            for screen in config.screens:
+                print(f"\tScreen {screen.tostring()}: {screen.path}")
 
