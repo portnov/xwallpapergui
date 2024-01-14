@@ -11,6 +11,7 @@ class ScreensScene(QtWidgets.QGraphicsScene):
     screenClicked = QtCore.pyqtSignal(object)
     screenDoubleClicked = QtCore.pyqtSignal(object)
     sceneClicked = QtCore.pyqtSignal()
+    imageDropped = QtCore.pyqtSignal(object, str)
 
 class ScreensView(QtWidgets.QGraphicsView):
     def mousePressEvent(self, ev):
@@ -35,6 +36,7 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
         self.number = number
         #self.setPen(QtGui.QPen(QtGui.QColor("red")))
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsFocusable | QtWidgets.QGraphicsItem.ItemIsSelectable)
+        self.setAcceptDrops(True)
         self._path = path
 
     @property
@@ -66,6 +68,20 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
 
     def mouseDoubleClickEvent(self, ev):
         self.scene().screenDoubleClicked.emit(self)
+
+    def dropEvent(self, ev):
+        data = ev.mimeData()
+        if data.hasUrls():
+            path = data.urls()[0].toLocalFile()
+        elif data.hasText():
+            path = data.text()
+        if not path:
+            return
+        prefix = "file://"
+        prefix_len = len(prefix)
+        if path.startswith(prefix):
+            path = path[prefix_len:]
+        self.scene().imageDropped.emit(self, path)
 
 def get_screens():
     screens = QtWidgets.QApplication.screens()
@@ -230,6 +246,7 @@ class GUI(QtWidgets.QMainWindow):
         self.scene.screenClicked.connect(self._on_screen_clicked)
         self.scene.sceneClicked.connect(self._on_scene_clicked)
         self.scene.screenDoubleClicked.connect(self._on_browse_screen)
+        self.scene.imageDropped.connect(self._on_image_dropped)
 
     def closeEvent(self, ev):
         self.selected_config.save(self.settings)
@@ -254,6 +271,11 @@ class GUI(QtWidgets.QMainWindow):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select file", ".", "Image files (*.jpg *.png *.png)")
         self.selected_screen_id = screen_item.number
         self._on_select_image(path)
+
+    def _on_image_dropped(self, screen_item, path):
+        self.selected_screen_id = screen_item.number
+        self._on_select_image(path)
+        self._display_selected_screen(screen_item)
 
     def _on_apply(self, button):
         self.selected_config.apply()
@@ -281,9 +303,12 @@ class GUI(QtWidgets.QMainWindow):
             text_item.setPos(screen_item.rect().topLeft())
             self.text_items.append(text_item)
 
-    def _on_screen_clicked(self, screen_item):
+    def _display_selected_screen(self, screen_item):
         r = screen_item.orig_rect
         self.selected_screen_label.setText(f"Screen #{screen_item.number}, position: {int(r.x())}, {int(r.y())}, size: {int(r.width())} x {int(r.height())}. Path: {screen_item.path}")
+
+    def _on_screen_clicked(self, screen_item):
+        self._display_selected_screen(screen_item)
         self.selected_screen_id = screen_item.number
 
     def _on_scene_clicked(self):
