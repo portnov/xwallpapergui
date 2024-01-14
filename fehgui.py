@@ -24,20 +24,70 @@ class ScreensView(QtWidgets.QGraphicsView):
         ev.ignore()
         #self.scene().screenClicked.emit(self)
 
+class ScreenMock:
+    def __init__(self, geometry, name, manufacturer, model, serial_number):
+        self._geometry = geometry
+        self._name = name
+        self._manufacturer = manufacturer
+        self._model = model
+        self._serial_number = serial_number
+
+    def name(self):
+        return self._name
+    
+    def manufacturer(self):
+        return self._manufacturer
+    
+    def model(self):
+        return self._model
+    
+    def geometry(self):
+        return self._geometry
+
+    def serialNumber(self):
+        return self._serial_number
+
 class ScreenItem(QtWidgets.QGraphicsPixmapItem):
-    def __init__(self, number, scale, rect, path=None, parent=None):
+    def __init__(self, number, scale, screen, path=None, parent=None):
+        rect = screen.geometry()
         self.scale = scale
         self.orig_rect = rect
+        self._name = screen.name()
+        if not self._name:
+            self._name = "[unnamed]"
+        self._manufacturer = screen.manufacturer()
+        if not self._manufacturer:
+            self._manufacturer = "[unknown manufacturer]"
+        self._model = screen.model()
+        if not self._model:
+            self._model = "[unknown model]"
+        self._serial_number = screen.serialNumber()
+        if not self._serial_number:
+            self._serial_number = "[unknown number]"
         self.scaled_rect = QtCore.QRectF(rect.x() / scale, rect.y() / scale, rect.width() / scale, rect.height() / scale) 
-        print(path)
-        pixmap = QtGui.QPixmap(path).scaled(int(self.scaled_rect.width()), int(self.scaled_rect.height()))
+        if path:
+            pixmap = QtGui.QPixmap(path).scaled(int(self.scaled_rect.width()), int(self.scaled_rect.height()))
+        else:
+            pixmap = QtGui.QPixmap(int(self.scaled_rect.width()), int(self.scaled_rect.height()))
+            pixmap.fill(QtGui.QColor("#00ff00"))
         super().__init__(pixmap, parent)
         self.setOffset(int(self.scaled_rect.x()), int(self.scaled_rect.y()))
         self.number = number
-        #self.setPen(QtGui.QPen(QtGui.QColor("red")))
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsFocusable | QtWidgets.QGraphicsItem.ItemIsSelectable)
         self.setAcceptDrops(True)
         self._path = path
+
+    def name(self):
+        return self._name
+    
+    def manufacturer(self):
+        return self._manufacturer
+    
+    def model(self):
+        return self._model
+
+    def serialNumber(self):
+        return self._serial_number
 
     @property
     def path(self):
@@ -46,18 +96,25 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
     @path.setter
     def path(self, path):
         self._path = path
-        pixmap = QtGui.QPixmap(path).scaled(int(self.scaled_rect.width()), int(self.scaled_rect.height()))
+        if path:
+            pixmap = QtGui.QPixmap(path).scaled(int(self.scaled_rect.width()), int(self.scaled_rect.height()))
+        else:
+            pixmap = QtGui.QPixmap(int(self.scaled_rect.width()), int(self.scaled_rect.height()))
+            pixmap.fill(QtGui.QColor("#00ff00"))
         self.setPixmap(pixmap)
 
     def rect(self):
         return self.scaled_rect
 
     def geometry(self):
+        return self.orig_rect
+
+    def geometry_str(self):
         r = self.orig_rect
         return f"{int(r.width())}x{int(r.height())}+{int(r.x())}+{int(r.y())}"
     
     def tostring(self):
-        return f"{self.number}: {self.geometry()}"
+        return f"#{self.number}: {self.manufacturer()} {self.model()} SN.{self.serialNumber()} @ {self.name()}: {self.geometry_str()}"
 
     def mousePressEvent(self, ev):
         super().mousePressEvent(ev)
@@ -84,14 +141,13 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
         self.scene().imageDropped.emit(self, path)
 
 def get_screens():
-    screens = QtWidgets.QApplication.screens()
-    for screen in screens:
-        yield screen.geometry()
+    return QtWidgets.QApplication.screens()
 
 def get_screen_items(screens, width, height):
-    max_x = max([s.x() + s.width() for s in screens])
-    max_y = max([s.y() + s.height() for s in screens])
-    screens = [QtCore.QRectF(s) for s in screens]
+    rects = [s.geometry() for s in screens]
+    max_x = max([s.x() + s.width() for s in rects])
+    max_y = max([s.y() + s.height() for s in rects])
+    rects = [QtCore.QRectF(s) for s in rects]
     scale_x = max_x / width
     scale_y = max_y / height
     scale = min(scale_x, scale_y)
@@ -116,7 +172,7 @@ class Config:
             return "___EMPTY___"
         s = ""
         for i, screen in enumerate(screens):
-            s = s + f"screen {i}: {screen.orig_rect}"
+            s = s + f"screen {i}: {screen.name()}, {screen.manufacturer()}, {screen.model()}, {screen.serialNumber()}, {screen.geometry()}"
         print(f"Pre-hash: <{s}>")
         return md5(s.encode('utf-8')).hexdigest()
 
@@ -160,9 +216,15 @@ class Config:
             y = settings.value("y", type=int)
             w = settings.value("w", type=int)
             h = settings.value("h", type=int)
+            name = settings.value("name")
+            manufacturer = settings.value("manufacturer")
+            model = settings.value("model")
+            serial_number = settings.value("serial_number")
             path = settings.value("path")
             paths.append(path)
-            screen = QtCore.QRectF(x, y, w, h)
+            rect = QtCore.QRectF(x, y, w, h)
+            mock = ScreenMock(rect, name, manufacturer, model, serial_number)
+            screen = ScreenItem(i, 1.0, mock)
             screens.append(screen)
         settings.endArray()
         cfg.screens = get_screen_items(screens, 320, 200)
@@ -192,6 +254,10 @@ class Config:
             settings.setValue("y", screen.orig_rect.y())
             settings.setValue("w", screen.orig_rect.width())
             settings.setValue("h", screen.orig_rect.height())
+            settings.setValue("name", screen.name())
+            settings.setValue("manufacturer", screen.manufacturer())
+            settings.setValue("model", screen.model())
+            settings.setValue("serial_number", screen.serialNumber())
             settings.setValue("path", screen.path)
             print(f"W: {screen.number} => {screen.path}")
         settings.endArray()
@@ -304,7 +370,7 @@ class GUI(QtWidgets.QMainWindow):
             self.text_items.append(text_item)
 
     def _display_selected_screen(self, screen_item):
-        r = screen_item.orig_rect
+        r = screen_item.geometry()
         self.selected_screen_label.setText(f"Screen #{screen_item.number}, position: {int(r.x())}, {int(r.y())}, size: {int(r.width())} x {int(r.height())}. Path: {screen_item.path}")
 
     def _on_screen_clicked(self, screen_item):
