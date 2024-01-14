@@ -90,6 +90,7 @@ class Config:
         self.screens = []
         self.name = "Unknown"
         self.id = "___UNKNOWN___"
+        self.mode = "--bg-scale"
 
     @staticmethod
     def screens_hash(screens=None):
@@ -131,6 +132,9 @@ class Config:
         cfg.name = settings.value(f"{section}/name")
         if not cfg.name:
             return None
+        cfg.mode = settings.value(f"{section}/mode")
+        if not cfg.mode:
+            cfg.mode = "--bg-fill"
         n_screens = settings.beginReadArray(f"{section}/screens")
         screens = []
         paths = []
@@ -164,6 +168,7 @@ class Config:
     def save(self, settings):
         section = f"config_{self.id}"
         settings.setValue(f"{section}/name", self.name)
+        settings.setValue(f"{section}/mode", self.mode)
         settings.beginWriteArray(f"{section}/screens")
         for screen in self.screens:
             settings.setArrayIndex(screen.number)
@@ -179,7 +184,7 @@ class Config:
         screens = sorted(self.screens, key = lambda s: s.number)
         paths = ["\""+s.path+"\"" for s in screens if s.path is not None]
         all_paths = " ".join(paths)
-        command = f"feh --bg-scale {all_paths}"
+        command = f"feh {self.mode} {all_paths}"
         print(command)
         subprocess.call(command, shell=True)
 
@@ -199,6 +204,14 @@ class GUI(QtWidgets.QMainWindow):
         topbar.setLayout(topbar_layout)
         self.current_config_label = QtWidgets.QLabel(self)
         topbar_layout.addWidget(self.current_config_label)
+        self.mode_combo = QtWidgets.QComboBox(self)
+        self.mode_combo.addItem("Center", "--bg-center")
+        self.mode_combo.addItem("Fill", "--bg-fill")
+        self.mode_combo.addItem("Max", "--bg-max")
+        self.mode_combo.addItem("Scale", "--bg-scale")
+        self.mode_combo.setCurrentIndex(0)
+        self.mode_combo.currentIndexChanged.connect(self._on_select_mode)
+        topbar_layout.addWidget(self.mode_combo)
         layout.addWidget(topbar)
         layout.addWidget(self.graphics_view, True)
         self.bottombar = QtWidgets.QWidget(self)
@@ -245,12 +258,17 @@ class GUI(QtWidgets.QMainWindow):
     def _on_apply(self, button):
         self.selected_config.apply()
 
+    def _on_select_mode(self):
+        self.selected_config.mode = self.mode_combo.currentData()
+
     def get_current_config(self):
         return Config.current_from_settings(self.settings)
     
     def load_config(self, config):
         self.selected_config = config
         self.current_config_label.setText(f"Config: {config.name}")
+        mode_idx = self.mode_combo.findData(config.mode)
+        self.mode_combo.setCurrentIndex(mode_idx)
         self.screen_items = config.screens[:]
         self.text_items = []
         for screen_item in config.screens:
@@ -304,9 +322,11 @@ if __name__ == "__main__":
                 sys.exit(1)
         config.apply()
     elif args.command == "list":
+        app = QtWidgets.QApplication(sys.argv)
         settings = QtCore.QSettings("fehgui", "fehgui")
         for config in Config.list_from_settings(settings):
             print(f"Configuration: ID = {config.id}, name = {config.name}")
+            print(f"Mode: {config.mode}")
             for screen in config.screens:
                 print(f"\tScreen {screen.tostring()}: {screen.path}")
 
