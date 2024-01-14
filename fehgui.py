@@ -23,16 +23,32 @@ class ScreensView(QtWidgets.QGraphicsView):
         ev.ignore()
         #self.scene().screenClicked.emit(self)
 
-class ScreenItem(QtWidgets.QGraphicsRectItem):
+class ScreenItem(QtWidgets.QGraphicsPixmapItem):
     def __init__(self, number, scale, rect, path=None, parent=None):
         self.scale = scale
         self.orig_rect = rect
-        scaled_rect = QtCore.QRectF(rect.x() / scale, rect.y() / scale, rect.width() / scale, rect.height() / scale) 
-        super().__init__(scaled_rect.x(), scaled_rect.y(), scaled_rect.width(), scaled_rect.height(), parent)
+        self.scaled_rect = QtCore.QRectF(rect.x() / scale, rect.y() / scale, rect.width() / scale, rect.height() / scale) 
+        print(path)
+        pixmap = QtGui.QPixmap(path).scaled(int(self.scaled_rect.width()), int(self.scaled_rect.height()))
+        super().__init__(pixmap, parent)
+        self.setOffset(int(self.scaled_rect.x()), int(self.scaled_rect.y()))
         self.number = number
-        self.setPen(QtGui.QPen(QtGui.QColor("red")))
+        #self.setPen(QtGui.QPen(QtGui.QColor("red")))
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsFocusable | QtWidgets.QGraphicsItem.ItemIsSelectable)
-        self.path = path
+        self._path = path
+
+    @property
+    def path(self):
+        return self._path
+    
+    @path.setter
+    def path(self, path):
+        self._path = path
+        pixmap = QtGui.QPixmap(path).scaled(int(self.scaled_rect.width()), int(self.scaled_rect.height()))
+        self.setPixmap(pixmap)
+
+    def rect(self):
+        return self.scaled_rect
 
     def geometry(self):
         r = self.orig_rect
