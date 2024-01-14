@@ -1,15 +1,26 @@
 #!/usr/bin/python3
 
 import sys
-from os.path import join, basename
+from os.path import basename
 from hashlib import md5
 import subprocess
 from PyQt5 import QtCore, QtWidgets, QtGui
-from PyQt5.QtCore import QStandardPaths
 
 class ScreensScene(QtWidgets.QGraphicsScene):
     screenClicked = QtCore.pyqtSignal(object)
     screenDoubleClicked = QtCore.pyqtSignal(object)
+    sceneClicked = QtCore.pyqtSignal()
+
+class ScreensView(QtWidgets.QGraphicsView):
+    def mousePressEvent(self, ev):
+        super().mousePressEvent(ev)
+        ev.ignore()
+
+    def mouseReleaseEvent(self, ev):
+        super().mouseReleaseEvent(ev)
+        self.scene().sceneClicked.emit()
+        ev.ignore()
+        #self.scene().screenClicked.emit(self)
 
 class ScreenItem(QtWidgets.QGraphicsRectItem):
     def __init__(self, number, scale, rect, path=None, parent=None):
@@ -22,8 +33,11 @@ class ScreenItem(QtWidgets.QGraphicsRectItem):
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsFocusable | QtWidgets.QGraphicsItem.ItemIsSelectable)
         self.path = path
 
+    def mousePressEvent(self, ev):
+        super().mousePressEvent(ev)
+        ev.accept()
+
     def mouseReleaseEvent(self, ev):
-        #print(f"Click on {self.number}")
         self.scene().screenClicked.emit(self)
 
     def mouseDoubleClickEvent(self, ev):
@@ -127,7 +141,7 @@ class GUI(QtWidgets.QMainWindow):
         super().__init__()
         self.settings = QtCore.QSettings("fehgui", "fehgui")
         self.scene = ScreensScene()
-        self.graphics_view = QtWidgets.QGraphicsView(self.scene, self)
+        self.graphics_view = ScreensView(self.scene, self)
         self.main_widget = QtWidgets.QWidget(self)
         self.selected_screen_id = None
         self.setCentralWidget(self.main_widget)
@@ -148,28 +162,31 @@ class GUI(QtWidgets.QMainWindow):
         browse_button = QtWidgets.QPushButton("Browse...", self)
         browse_button.clicked.connect(self._on_browse_selected)
         bottombar_layout.addWidget(browse_button)
-        save_button = QtWidgets.QPushButton("Save", self)
-        bottombar_layout.addWidget(save_button)
-        save_button.clicked.connect(self._on_save)
         apply_button = QtWidgets.QPushButton("Apply", self)
         bottombar_layout.addWidget(apply_button)
         apply_button.clicked.connect(self._on_apply)
         layout.addWidget(self.bottombar)
         self.load_config(self.get_current_config())
         self.scene.screenClicked.connect(self._on_screen_clicked)
+        self.scene.sceneClicked.connect(self._on_scene_clicked)
         self.scene.screenDoubleClicked.connect(self._on_browse_screen)
 
-    def _on_save(self, button):
+    def closeEvent(self, ev):
         self.selected_config.save(self.settings)
         self.settings.sync()
+        ev.accept()
 
     def _on_select_image(self, path):
+        if not path:
+            return
         i = self.selected_screen_id
-        print(f"{i} => {path}")
+        print(f"{i} :=> {path}")
         self.screen_items[i].path = path
         self.text_items[i].setPlainText(f"{i}: {basename(path)}")
 
     def _on_browse_selected(self, button):
+        if self.selected_screen_id is None:
+            return
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select file", ".", "Image files (*.jpg *.png *.png)")
         self._on_select_image(path)
 
@@ -190,7 +207,6 @@ class GUI(QtWidgets.QMainWindow):
         return Config.current_from_settings(self.settings)
     
     def load_config(self, config):
-        #print("Name", config.name)
         self.selected_config = config
         self.current_config_label.setText(f"Config: {config.name}")
         self.screen_items = config.screens[:]
@@ -202,13 +218,19 @@ class GUI(QtWidgets.QMainWindow):
             else:
                 text = f"{screen_item.number}: {basename(screen_item.path)}"
             text_item = self.scene.addText(text)
-            text_item.setPos(screen_item.rect().center())
+            text_item.setPos(screen_item.rect().topLeft())
             self.text_items.append(text_item)
 
     def _on_screen_clicked(self, screen_item):
         r = screen_item.orig_rect
         self.selected_screen_label.setText(f"Screen #{screen_item.number}, position: {int(r.x())}, {int(r.y())}, size: {int(r.width())} x {int(r.height())}. Path: {screen_item.path}")
         self.selected_screen_id = screen_item.number
+
+    def _on_scene_clicked(self):
+        selected = self.scene.selectedItems()
+        if not selected:
+            self.selected_screen_label.setText("")
+            self.selected_screen_id = None
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
