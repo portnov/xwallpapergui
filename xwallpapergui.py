@@ -311,7 +311,7 @@ class Config:
 class GUI(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.settings = QtCore.QSettings("fehgui", "fehgui")
+        self.settings = QtCore.QSettings("xwallpapergui", "xwallpapergui")
         self.scene = ScreensScene()
         self.graphics_view = ScreensView(self.scene, self)
         self.main_widget = QtWidgets.QWidget(self)
@@ -506,7 +506,7 @@ def launch_gui():
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(prog="fehgui", description="Manipulate wallpapers in multimonitor configurations using feh")
+    parser = argparse.ArgumentParser(prog="xwallpapergui", description="Manipulate wallpapers in multimonitor configurations using xwallpaper")
     subparsers = parser.add_subparsers(title="Action to be executed", dest="command")
     parser_apply = subparsers.add_parser("apply", help="Apply wallpapers from saved configuration")
     parser_apply.add_argument('-i', '--id', metavar="ID", help="Apply wallpapers from specified configuration")
@@ -518,7 +518,7 @@ if __name__ == "__main__":
         launch_gui()
     elif args.command == "apply":
         app = QtWidgets.QApplication(sys.argv)
-        settings = QtCore.QSettings("fehgui", "fehgui")
+        settings = QtCore.QSettings("xwallpaper", "xwallpaper")
         if args.id is None:
             config = Config.current_from_settings(settings)
         else:
@@ -529,7 +529,7 @@ if __name__ == "__main__":
         config.apply()
     elif args.command == "list":
         app = QtWidgets.QApplication(sys.argv)
-        settings = QtCore.QSettings("fehgui", "fehgui")
+        settings = QtCore.QSettings("xwallpaper", "xwallpaper")
         current_config = Config.current_from_settings(settings)
         for config in Config.list_from_settings(settings):
             if config.id == current_config.id:
