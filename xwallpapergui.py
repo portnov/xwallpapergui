@@ -75,6 +75,8 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsFocusable | QtWidgets.QGraphicsItem.ItemIsSelectable)
         self.setAcceptDrops(True)
         self.mode = mode
+        if not self.mode:
+            self.mode = "--zoom"
         self._path = path
         self._hashkey = None
 
