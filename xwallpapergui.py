@@ -206,7 +206,7 @@ class Config:
         if not screens:
             return "___EMPTY___"
         s = ""
-        for screen in screens:
+        for screen in sorted(screens, key = lambda s: s.name()):
             s = s + screen.for_hash()
         #print(f"Pre-hash: <{s}>")
         return md5(s.encode('utf-8')).hexdigest()
