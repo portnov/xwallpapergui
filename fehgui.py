@@ -48,7 +48,7 @@ class ScreenMock:
         return self._serial_number
 
 class ScreenItem(QtWidgets.QGraphicsPixmapItem):
-    def __init__(self, number, scale, screen, path=None, parent=None):
+    def __init__(self, scale, screen, path=None, mode=None, parent=None):
         rect = screen.geometry()
         self.scale = scale
         self.orig_rect = rect
@@ -72,10 +72,11 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
             pixmap.fill(QtGui.QColor("#00ff00"))
         super().__init__(pixmap, parent)
         self.setOffset(int(self.scaled_rect.x()), int(self.scaled_rect.y()))
-        self.number = number
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsFocusable | QtWidgets.QGraphicsItem.ItemIsSelectable)
         self.setAcceptDrops(True)
+        self.mode = mode
         self._path = path
+        self._hashkey = None
 
     def name(self):
         return self._name
@@ -118,7 +119,15 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
         return f"{self.manufacturer()} {self.model()} SN.{self.serialNumber()} @ {self.name()}"
 
     def tostring(self):
-        return f"#{self.number}: {self.monitor_name()}: {self.geometry_str()}"
+        return f"{self.monitor_name()}: {self.geometry_str()}"
+
+    def for_hash(self):
+        return f"[{self.name()}, {self.manufacturer()}, {self.model()}, {self.serialNumber()}, {self.geometry()}]"
+
+    def hashkey(self):
+        if self._hashkey is None:
+            self._hashkey = md5(self.for_hash().encode('utf-8')).hexdigest()
+        return self._hashkey
     
     def __repr__(self):
         return self.tostring()
@@ -158,7 +167,14 @@ def get_screen_items(screens, width, height):
     scale_x = max_x / width
     scale_y = max_y / height
     scale = min(scale_x, scale_y)
-    return [ScreenItem(i, scale, s) for i, s in enumerate(screens)]
+
+    def get_mode(s):
+        if hasattr(s, 'mode'):
+            return s.mode
+        else:
+            return None
+
+    return [ScreenItem(scale, s, mode=get_mode(s)) for s in screens]
 
 def get_scaled_screens(width, height):
     screens = list(get_screens())
@@ -169,7 +185,6 @@ class Config:
         self.screens = []
         self.name = "Unknown"
         self.id = "___UNKNOWN___"
-        self.mode = "--bg-scale"
 
     def displayed_name(self, actual_id=None):
         if actual_id is not None and actual_id == self.id:
@@ -177,6 +192,12 @@ class Config:
         else:
             selected = "[ ] "
         return f"{selected}[{self.id[:8]}]: {self.name}"
+    
+    def set_mode(self, screen_key, mode):
+        for screen in self.screens:
+            if screen.hashkey() == screen_key:
+                screen.mode = mode
+                return
 
     @staticmethod
     def screens_hash(screens=None):
@@ -186,8 +207,8 @@ class Config:
             return "___EMPTY___"
         s = ""
         for screen in screens:
-            s = s + f"screen {screen.number}: {screen.name()}, {screen.manufacturer()}, {screen.model()}, {screen.serialNumber()}, {screen.geometry()}"
-        print(f"Pre-hash: <{s}>")
+            s = s + screen.for_hash()
+        #print(f"Pre-hash: <{s}>")
         return md5(s.encode('utf-8')).hexdigest()
 
     @staticmethod
@@ -202,7 +223,7 @@ class Config:
     def current_from_settings(settings):
         empty_config = Config.new()
         section = f"config_{empty_config.id}"
-        print("current config id", empty_config.id)
+        #print("current config id", empty_config.id)
         name = settings.value(f"{section}/name")
         if not name:
             print(f"loading new config, name={empty_config.name}")
@@ -218,9 +239,6 @@ class Config:
         cfg.name = settings.value(f"{section}/name")
         if not cfg.name:
             return None
-        cfg.mode = settings.value(f"{section}/mode")
-        if not cfg.mode:
-            cfg.mode = "--bg-fill"
         n_screens = settings.beginReadArray(f"{section}/screens")
         screens = []
         paths = []
@@ -238,8 +256,9 @@ class Config:
             paths.append(path)
             rect = QtCore.QRectF(x, y, w, h)
             mock = ScreenMock(rect, name, manufacturer, model, serial_number)
-            number = settings.value("number", type=int)
-            screen = ScreenItem(number, 1.0, mock)
+            screen = ScreenItem(1.0, mock)
+            screen.mode = settings.value("mode")
+            #print(f"Load: {screen.name()}, {screen.path}, {screen.mode}")
             screens.append(screen)
         settings.endArray()
         cfg.screens = get_screen_items(screens, 320, 200)
@@ -261,11 +280,9 @@ class Config:
     def save(self, settings):
         section = f"config_{self.id}"
         settings.setValue(f"{section}/name", self.name)
-        settings.setValue(f"{section}/mode", self.mode)
         settings.beginWriteArray(f"{section}/screens")
         for i, screen in enumerate(self.screens):
             settings.setArrayIndex(i)
-            settings.setValue("number", screen.number)
             settings.setValue("x", screen.orig_rect.x())
             settings.setValue("y", screen.orig_rect.y())
             settings.setValue("w", screen.orig_rect.width())
@@ -275,15 +292,19 @@ class Config:
             settings.setValue("model", screen.model())
             settings.setValue("serial_number", screen.serialNumber())
             settings.setValue("path", screen.path)
-            print(f"W: {screen.number} => {screen.path}")
+            settings.setValue("mode", screen.mode)
+            #print(f"W: {screen.name()} => {screen.path}, {screen.mode}")
         settings.endArray()
 
     def apply(self):
-        screens = sorted(self.screens, key = lambda s: s.number)
-        print(list(screens))
-        paths = ["\""+s.path+"\"" for s in screens if s.path is not None]
-        all_paths = " ".join(paths)
-        command = f"feh {self.mode} {all_paths}"
+        args = []
+        for screen in self.screens:
+            args.append("--output")
+            args.append(screen.name())
+            args.append("--zoom")
+            args.append('"'+screen.path+'"')
+        all_args = " ".join(args)
+        command = f"xwallpaper {all_args}"
         print(command)
         subprocess.call(command, shell=True)
 
@@ -294,7 +315,7 @@ class GUI(QtWidgets.QMainWindow):
         self.scene = ScreensScene()
         self.graphics_view = ScreensView(self.scene, self)
         self.main_widget = QtWidgets.QWidget(self)
-        self.selected_screen_id = None
+        self.selected_screen_key = None
         self.setCentralWidget(self.main_widget)
         layout = QtWidgets.QVBoxLayout()
         self.main_widget.setLayout(layout)
@@ -314,25 +335,30 @@ class GUI(QtWidgets.QMainWindow):
         rename_button.clicked.connect(self._on_rename_config)
         topbar_layout.addWidget(rename_button)
 
-        self.mode_combo = QtWidgets.QComboBox(self)
-        self.mode_combo.addItem("Center", "--bg-center")
-        self.mode_combo.addItem("Fill", "--bg-fill")
-        self.mode_combo.addItem("Max", "--bg-max")
-        self.mode_combo.addItem("Scale", "--bg-scale")
-        self.mode_combo.setCurrentIndex(0)
-        self.mode_combo.currentIndexChanged.connect(self._on_select_mode)
-        topbar_layout.addWidget(self.mode_combo)
-
         layout.addWidget(topbar)
         layout.addWidget(self.graphics_view, True)
+
         self.bottombar = QtWidgets.QWidget(self)
         bottombar_layout = QtWidgets.QHBoxLayout()
         self.bottombar.setLayout(bottombar_layout)
         self.selected_screen_label = QtWidgets.QLabel(self)
         bottombar_layout.addWidget(self.selected_screen_label, True)
+
         browse_button = QtWidgets.QPushButton("Browse...", self)
         browse_button.clicked.connect(self._on_browse_selected)
         bottombar_layout.addWidget(browse_button)
+
+        self.mode_combo = QtWidgets.QComboBox(self)
+        self.mode_combo.addItem("Maximize", "--maximize")
+        self.mode_combo.addItem("Stretch", "--stretch")
+        self.mode_combo.addItem("Zoom", "--zoom")
+        self.mode_combo.addItem("Tile", "--tile")
+        self.mode_combo.addItem("Center", "--center")
+        self.mode_combo.setCurrentIndex(0)
+        self.mode_combo.currentIndexChanged.connect(self._on_select_mode)
+        self.mode_combo.setEnabled(False)
+        bottombar_layout.addWidget(self.mode_combo)
+
         apply_button = QtWidgets.QPushButton("Apply", self)
         bottombar_layout.addWidget(apply_button)
         apply_button.clicked.connect(self._on_apply)
@@ -340,6 +366,8 @@ class GUI(QtWidgets.QMainWindow):
 
         self.load_config(self.get_current_config())
         self._set_selected_config(self.selected_config)
+
+        self._mask_select_mode = False
 
         self.current_config_combo.currentIndexChanged.connect(self._on_select_config)
         self.scene.screenClicked.connect(self._on_screen_clicked)
@@ -358,24 +386,24 @@ class GUI(QtWidgets.QMainWindow):
     def _on_select_image(self, path):
         if not path:
             return
-        i = self.selected_screen_id
-        print(f"{i} :=> {path}")
-        self.screen_items[i].path = path
-        self.text_items[i].setPlainText(f"{i}: {basename(path)}")
+        key = self.selected_screen_key
+        print(f"{key} :=> {path}")
+        self.screen_items[key].path = path
+        self.text_items[key].setPlainText(f"{key}: {basename(path)}")
 
     def _on_browse_selected(self, button):
-        if self.selected_screen_id is None:
+        if self.selected_screen_key is None:
             return
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select file", ".", "Image files (*.jpg *.png *.png)")
         self._on_select_image(path)
 
     def _on_browse_screen(self, screen_item):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select file", ".", "Image files (*.jpg *.png *.png)")
-        self.selected_screen_id = screen_item.number
+        self.selected_screen_key = screen_item.hashkey()
         self._on_select_image(path)
 
     def _on_image_dropped(self, screen_item, path):
-        self.selected_screen_id = screen_item.number
+        self.selected_screen_key = screen_item.hashkey()
         self._on_select_image(path)
         self._display_selected_screen(screen_item)
 
@@ -383,7 +411,12 @@ class GUI(QtWidgets.QMainWindow):
         self.selected_config.apply()
 
     def _on_select_mode(self):
-        self.selected_config.mode = self.mode_combo.currentData()
+        if self._mask_select_mode:
+            return
+        mode = self.mode_combo.currentData()
+        self.selected_config.set_mode(self.selected_screen_key, mode)
+        print("Selected", mode)
+        self._save_settings()
 
     def _on_rename_config(self):
         new_name, ok = QtWidgets.QInputDialog.getText(self, "New configuration name", "New name:", QtWidgets.QLineEdit.Normal, self.selected_config.name)
@@ -398,6 +431,12 @@ class GUI(QtWidgets.QMainWindow):
         cfg_idx = self.current_config_combo.findData(cfg.id)
         self.current_config_combo.setCurrentIndex(cfg_idx)
 
+    def _set_selected_mode(self, mode):
+        self._mask_select_mode = True
+        mode_idx = self.mode_combo.findData(mode)
+        self.mode_combo.setCurrentIndex(mode_idx)
+        self._mask_select_mode = False
+
     def _on_select_config(self, src):
         self._save_settings()
         cfg_id = self.current_config_combo.currentData()
@@ -409,36 +448,39 @@ class GUI(QtWidgets.QMainWindow):
     
     def load_config(self, config):
         self.selected_config = config
-        mode_idx = self.mode_combo.findData(config.mode)
-        self.mode_combo.setCurrentIndex(mode_idx)
-        self.screen_items = config.screens[:]
-        self.text_items = []
+        self.screen_items = dict([(s.hashkey(), s) for s in config.screens])
+        self.text_items = dict()
         self.scene.clear()
         for screen_item in config.screens:
             self.scene.addItem(screen_item)
             if screen_item.path is None:
-                text = f"{screen_item.number}: <Not set>"
+                text = f"{screen_item.name()}: <Not set>"
             else:
-                text = f"{screen_item.number}: {basename(screen_item.path)}"
+                text = f"{screen_item.name()}: {basename(screen_item.path)}"
             text_item = self.scene.addText(text)
             text_item.setPos(screen_item.rect().topLeft())
-            self.text_items.append(text_item)
+            self.text_items[screen_item.hashkey()] = text_item
+        self.mode_combo.setEnabled(False)
 
     def _display_selected_screen(self, screen_item):
-        text = f"""<b>Selected screen</b>: Xinerama ID #{screen_item.number}, geometry: {screen_item.geometry_str()}.<br>
+        text = f"""<b>Selected screen</b>: geometry: {screen_item.geometry_str()}.<br>
         <b>Monitor</b>: {screen_item.monitor_name()}<br>
         <b>Wallpaper</b>: {screen_item.path}"""
         self.selected_screen_label.setText(text)
 
     def _on_screen_clicked(self, screen_item):
         self._display_selected_screen(screen_item)
-        self.selected_screen_id = screen_item.number
+        self.selected_screen_key = screen_item.hashkey()
+        #print(f"Screen clicked: {screen_item.name()}, {screen_item.path}, {screen_item.mode}")
+        self._set_selected_mode(screen_item.mode)
+        self.mode_combo.setEnabled(True)
 
     def _on_scene_clicked(self):
         selected = self.scene.selectedItems()
         if not selected:
             self.selected_screen_label.setText("")
-            self.selected_screen_id = None
+            self.mode_combo.setEnabled(False)
+            self.selected_screen_key = None
 
 def launch_gui():
     app = QtWidgets.QApplication(sys.argv)
@@ -479,7 +521,6 @@ if __name__ == "__main__":
             else:
                 selected = "[ ] "
             print(f"{selected}Configuration: ID = {config.id}, name = {config.name}")
-            print(f"Mode: {config.mode}")
             for screen in config.screens:
-                print(f"\tScreen {screen.tostring()}: {screen.path}")
+                print(f"\t{screen.tostring()}: wallpaper {screen.path}, mode {screen.mode}")
 
