@@ -411,7 +411,7 @@ class GUI(QtWidgets.QMainWindow):
         if not path:
             return
         key = self.selected_screen_key
-        print(f"{key} :=> {path}")
+        #print(f"{key} :=> {path}")
         self.screen_items[key].path = path
         self.text_items[key].setPlainText(f"{self.screen_items[key].name()}: {basename(path)}")
 
@@ -439,7 +439,7 @@ class GUI(QtWidgets.QMainWindow):
             return
         mode = self.mode_combo.currentData()
         self.selected_config.set_mode(self.selected_screen_key, mode)
-        print("Selected", mode)
+        #print("Selected", mode)
         self._save_settings()
 
     def _on_rename_config(self):
