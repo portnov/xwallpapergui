@@ -284,8 +284,14 @@ class GUI(QtWidgets.QMainWindow):
         topbar = QtWidgets.QWidget(self)
         topbar_layout = QtWidgets.QHBoxLayout()
         topbar.setLayout(topbar_layout)
-        self.current_config_label = QtWidgets.QLabel(self)
-        topbar_layout.addWidget(self.current_config_label)
+
+        label = QtWidgets.QLabel("Configuration:", self)
+        topbar_layout.addWidget(label)
+        self.current_config_combo = QtWidgets.QComboBox(self)
+        for cfg in Config.list_from_settings(self.settings):
+            self.current_config_combo.addItem(f"[{cfg.id[:8]}]: {cfg.name}", cfg.id)
+        topbar_layout.addWidget(self.current_config_combo)
+
         self.mode_combo = QtWidgets.QComboBox(self)
         self.mode_combo.addItem("Center", "--bg-center")
         self.mode_combo.addItem("Fill", "--bg-fill")
@@ -294,6 +300,7 @@ class GUI(QtWidgets.QMainWindow):
         self.mode_combo.setCurrentIndex(0)
         self.mode_combo.currentIndexChanged.connect(self._on_select_mode)
         topbar_layout.addWidget(self.mode_combo)
+
         layout.addWidget(topbar)
         layout.addWidget(self.graphics_view, True)
         self.bottombar = QtWidgets.QWidget(self)
@@ -308,7 +315,11 @@ class GUI(QtWidgets.QMainWindow):
         bottombar_layout.addWidget(apply_button)
         apply_button.clicked.connect(self._on_apply)
         layout.addWidget(self.bottombar)
+
         self.load_config(self.get_current_config())
+        self._set_selected_config(self.selected_config)
+
+        self.current_config_combo.currentIndexChanged.connect(self._on_select_config)
         self.scene.screenClicked.connect(self._on_screen_clicked)
         self.scene.sceneClicked.connect(self._on_scene_clicked)
         self.scene.screenDoubleClicked.connect(self._on_browse_screen)
@@ -349,16 +360,25 @@ class GUI(QtWidgets.QMainWindow):
     def _on_select_mode(self):
         self.selected_config.mode = self.mode_combo.currentData()
 
+    def _set_selected_config(self, cfg):
+        cfg_idx = self.current_config_combo.findData(cfg.id)
+        self.current_config_combo.setCurrentIndex(cfg_idx)
+
+    def _on_select_config(self, src):
+        cfg_id = self.current_config_combo.currentData()
+        config = Config.from_settings(self.settings, cfg_id)
+        self.load_config(config)
+
     def get_current_config(self):
         return Config.current_from_settings(self.settings)
     
     def load_config(self, config):
         self.selected_config = config
-        self.current_config_label.setText(f"Config: {config.name}")
         mode_idx = self.mode_combo.findData(config.mode)
         self.mode_combo.setCurrentIndex(mode_idx)
         self.screen_items = config.screens[:]
         self.text_items = []
+        self.scene.clear()
         for screen_item in config.screens:
             self.scene.addItem(screen_item)
             if screen_item.path is None:
