@@ -119,6 +119,9 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
 
     def tostring(self):
         return f"#{self.number}: {self.monitor_name()}: {self.geometry_str()}"
+    
+    def __repr__(self):
+        return self.tostring()
 
     def mousePressEvent(self, ev):
         super().mousePressEvent(ev)
@@ -172,7 +175,7 @@ class Config:
         if actual_id is not None and actual_id == self.id:
             selected = "[*] "
         else:
-            selected = ""
+            selected = "[ ] "
         return f"{selected}[{self.id[:8]}]: {self.name}"
 
     @staticmethod
@@ -182,8 +185,8 @@ class Config:
         if not screens:
             return "___EMPTY___"
         s = ""
-        for i, screen in enumerate(screens):
-            s = s + f"screen {i}: {screen.name()}, {screen.manufacturer()}, {screen.model()}, {screen.serialNumber()}, {screen.geometry()}"
+        for screen in screens:
+            s = s + f"screen {screen.number}: {screen.name()}, {screen.manufacturer()}, {screen.model()}, {screen.serialNumber()}, {screen.geometry()}"
         print(f"Pre-hash: <{s}>")
         return md5(s.encode('utf-8')).hexdigest()
 
@@ -235,7 +238,8 @@ class Config:
             paths.append(path)
             rect = QtCore.QRectF(x, y, w, h)
             mock = ScreenMock(rect, name, manufacturer, model, serial_number)
-            screen = ScreenItem(i, 1.0, mock)
+            number = settings.value("number", type=int)
+            screen = ScreenItem(number, 1.0, mock)
             screens.append(screen)
         settings.endArray()
         cfg.screens = get_screen_items(screens, 320, 200)
@@ -259,8 +263,9 @@ class Config:
         settings.setValue(f"{section}/name", self.name)
         settings.setValue(f"{section}/mode", self.mode)
         settings.beginWriteArray(f"{section}/screens")
-        for screen in self.screens:
-            settings.setArrayIndex(screen.number)
+        for i, screen in enumerate(self.screens):
+            settings.setArrayIndex(i)
+            settings.setValue("number", screen.number)
             settings.setValue("x", screen.orig_rect.x())
             settings.setValue("y", screen.orig_rect.y())
             settings.setValue("w", screen.orig_rect.width())
@@ -275,6 +280,7 @@ class Config:
 
     def apply(self):
         screens = sorted(self.screens, key = lambda s: s.number)
+        print(list(screens))
         paths = ["\""+s.path+"\"" for s in screens if s.path is not None]
         all_paths = " ".join(paths)
         command = f"feh {self.mode} {all_paths}"
@@ -466,8 +472,13 @@ if __name__ == "__main__":
     elif args.command == "list":
         app = QtWidgets.QApplication(sys.argv)
         settings = QtCore.QSettings("fehgui", "fehgui")
+        current_config = Config.current_from_settings(settings)
         for config in Config.list_from_settings(settings):
-            print(f"Configuration: ID = {config.id}, name = {config.name}")
+            if config.id == current_config.id:
+                selected = "[*] "
+            else:
+                selected = "[ ] "
+            print(f"{selected}Configuration: ID = {config.id}, name = {config.name}")
             print(f"Mode: {config.mode}")
             for screen in config.screens:
                 print(f"\tScreen {screen.tostring()}: {screen.path}")
