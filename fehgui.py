@@ -164,6 +164,9 @@ class Config:
         self.id = "___UNKNOWN___"
         self.mode = "--bg-scale"
 
+    def displayed_name(self):
+        return f"[{self.id[:8]}]: {self.name}"
+
     @staticmethod
     def screens_hash(screens=None):
         if screens is None:
@@ -289,8 +292,12 @@ class GUI(QtWidgets.QMainWindow):
         topbar_layout.addWidget(label)
         self.current_config_combo = QtWidgets.QComboBox(self)
         for cfg in Config.list_from_settings(self.settings):
-            self.current_config_combo.addItem(f"[{cfg.id[:8]}]: {cfg.name}", cfg.id)
+            self.current_config_combo.addItem(cfg.displayed_name(), cfg.id)
         topbar_layout.addWidget(self.current_config_combo)
+
+        rename_button = QtWidgets.QPushButton("Rename", self)
+        rename_button.clicked.connect(self._on_rename_config)
+        topbar_layout.addWidget(rename_button)
 
         self.mode_combo = QtWidgets.QComboBox(self)
         self.mode_combo.addItem("Center", "--bg-center")
@@ -325,9 +332,12 @@ class GUI(QtWidgets.QMainWindow):
         self.scene.screenDoubleClicked.connect(self._on_browse_screen)
         self.scene.imageDropped.connect(self._on_image_dropped)
 
-    def closeEvent(self, ev):
+    def _save_settings(self):
         self.selected_config.save(self.settings)
         self.settings.sync()
+
+    def closeEvent(self, ev):
+        self._save_settings()
         ev.accept()
 
     def _on_select_image(self, path):
@@ -360,11 +370,20 @@ class GUI(QtWidgets.QMainWindow):
     def _on_select_mode(self):
         self.selected_config.mode = self.mode_combo.currentData()
 
+    def _on_rename_config(self):
+        new_name, ok = QtWidgets.QInputDialog.getText(self, "New configuration name", "New name:", QtWidgets.QLineEdit.Normal, self.selected_config.name)
+        if ok and new_name:
+            self.selected_config.name = new_name
+            cfg_idx = self.current_config_combo.findData(self.selected_config.id)
+            self.current_config_combo.setItemText(cfg_idx, self.selected_config.displayed_name())
+        self._save_settings()
+
     def _set_selected_config(self, cfg):
         cfg_idx = self.current_config_combo.findData(cfg.id)
         self.current_config_combo.setCurrentIndex(cfg_idx)
 
     def _on_select_config(self, src):
+        self._save_settings()
         cfg_id = self.current_config_combo.currentData()
         config = Config.from_settings(self.settings, cfg_id)
         self.load_config(config)
