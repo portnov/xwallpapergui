@@ -168,8 +168,12 @@ class Config:
         self.id = "___UNKNOWN___"
         self.mode = "--bg-scale"
 
-    def displayed_name(self):
-        return f"[{self.id[:8]}]: {self.name}"
+    def displayed_name(self, actual_id=None):
+        if actual_id is not None and actual_id == self.id:
+            selected = "[*] "
+        else:
+            selected = ""
+        return f"{selected}[{self.id[:8]}]: {self.name}"
 
     @staticmethod
     def screens_hash(screens=None):
@@ -295,8 +299,9 @@ class GUI(QtWidgets.QMainWindow):
         label = QtWidgets.QLabel("Configuration:", self)
         topbar_layout.addWidget(label)
         self.current_config_combo = QtWidgets.QComboBox(self)
+        actual_id = self.get_current_config().id
         for cfg in Config.list_from_settings(self.settings):
-            self.current_config_combo.addItem(cfg.displayed_name(), cfg.id)
+            self.current_config_combo.addItem(cfg.displayed_name(actual_id), cfg.id)
         topbar_layout.addWidget(self.current_config_combo, True)
 
         rename_button = QtWidgets.QPushButton("Rename", self)
@@ -379,7 +384,8 @@ class GUI(QtWidgets.QMainWindow):
         if ok and new_name:
             self.selected_config.name = new_name
             cfg_idx = self.current_config_combo.findData(self.selected_config.id)
-            self.current_config_combo.setItemText(cfg_idx, self.selected_config.displayed_name())
+            actual_id = self.get_current_config().id
+            self.current_config_combo.setItemText(cfg_idx, self.selected_config.displayed_name(actual_id))
         self._save_settings()
 
     def _set_selected_config(self, cfg):
