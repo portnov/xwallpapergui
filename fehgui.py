@@ -339,14 +339,25 @@ class GUI(QtWidgets.QMainWindow):
         layout.addWidget(self.graphics_view, True)
 
         self.bottombar = QtWidgets.QWidget(self)
-        bottombar_layout = QtWidgets.QHBoxLayout()
+        bottombar_layout = QtWidgets.QVBoxLayout()
         self.bottombar.setLayout(bottombar_layout)
         self.selected_screen_label = QtWidgets.QLabel(self)
-        bottombar_layout.addWidget(self.selected_screen_label, True)
+        bottombar_layout.addWidget(self.selected_screen_label)
 
-        browse_button = QtWidgets.QPushButton("Browse...", self)
-        browse_button.clicked.connect(self._on_browse_selected)
-        bottombar_layout.addWidget(browse_button)
+        path_layout = QtWidgets.QHBoxLayout()
+        self.path_label = QtWidgets.QLabel(self)
+        path_layout.addWidget(self.path_label, True)
+
+        self.browse_button = QtWidgets.QPushButton("Browse...", self)
+        self.browse_button.clicked.connect(self._on_browse_selected)
+        self.browse_button.setEnabled(False)
+        path_layout.addWidget(self.browse_button)
+
+        bottombar_layout.addLayout(path_layout)
+
+        mode_layout = QtWidgets.QHBoxLayout()
+        mode_label = QtWidgets.QLabel("<b>Mode</b>:", self)
+        mode_layout.addWidget(mode_label)
 
         self.mode_combo = QtWidgets.QComboBox(self)
         self.mode_combo.addItem("Maximize", "--maximize")
@@ -357,10 +368,12 @@ class GUI(QtWidgets.QMainWindow):
         self.mode_combo.setCurrentIndex(0)
         self.mode_combo.currentIndexChanged.connect(self._on_select_mode)
         self.mode_combo.setEnabled(False)
-        bottombar_layout.addWidget(self.mode_combo)
+        mode_layout.addWidget(self.mode_combo)
+
+        bottombar_layout.addLayout(mode_layout)
 
         apply_button = QtWidgets.QPushButton("Apply", self)
-        bottombar_layout.addWidget(apply_button)
+        bottombar_layout.addWidget(apply_button, False, QtCore.Qt.AlignRight)
         apply_button.clicked.connect(self._on_apply)
         layout.addWidget(self.bottombar)
 
@@ -461,12 +474,13 @@ class GUI(QtWidgets.QMainWindow):
             text_item.setPos(screen_item.rect().topLeft())
             self.text_items[screen_item.hashkey()] = text_item
         self.mode_combo.setEnabled(False)
+        self.browse_button.setEnabled(False)
 
     def _display_selected_screen(self, screen_item):
         text = f"""<b>Selected screen</b>: geometry: {screen_item.geometry_str()}.<br>
-        <b>Monitor</b>: {screen_item.monitor_name()}<br>
-        <b>Wallpaper</b>: {screen_item.path}"""
+        <b>Monitor</b>: {screen_item.monitor_name()}"""
         self.selected_screen_label.setText(text)
+        self.path_label.setText(f"<b>Wallpaper</b>: {screen_item.path}")
 
     def _on_screen_clicked(self, screen_item):
         self._display_selected_screen(screen_item)
@@ -474,12 +488,14 @@ class GUI(QtWidgets.QMainWindow):
         #print(f"Screen clicked: {screen_item.name()}, {screen_item.path}, {screen_item.mode}")
         self._set_selected_mode(screen_item.mode)
         self.mode_combo.setEnabled(True)
+        self.browse_button.setEnabled(True)
 
     def _on_scene_clicked(self):
         selected = self.scene.selectedItems()
         if not selected:
             self.selected_screen_label.setText("")
             self.mode_combo.setEnabled(False)
+            self.browse_button.setEnabled(False)
             self.selected_screen_key = None
 
 def launch_gui():
