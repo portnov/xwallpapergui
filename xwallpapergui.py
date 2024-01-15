@@ -308,7 +308,7 @@ class Config:
         for screen in self.screens:
             args.append("--output")
             args.append(screen.name())
-            args.append("--zoom")
+            args.append(screen.mode)
             args.append('"'+screen.path+'"')
         all_args = " ".join(args)
         command = f"xwallpaper {all_args}"
