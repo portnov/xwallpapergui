@@ -525,7 +525,7 @@ if __name__ == "__main__":
         launch_gui()
     elif args.command == "apply":
         app = QtWidgets.QApplication(sys.argv)
-        settings = QtCore.QSettings("xwallpaper", "xwallpaper")
+        settings = QtCore.QSettings("xwallpapergui", "xwallpapergui")
         if args.id is None:
             config = Config.current_from_settings(settings)
         else:
@@ -536,7 +536,7 @@ if __name__ == "__main__":
         config.apply()
     elif args.command == "list":
         app = QtWidgets.QApplication(sys.argv)
-        settings = QtCore.QSettings("xwallpaper", "xwallpaper")
+        settings = QtCore.QSettings("xwallpapergui", "xwallpapergui")
         current_config = Config.current_from_settings(settings)
         for config in Config.list_from_settings(settings):
             if config.id == current_config.id:
