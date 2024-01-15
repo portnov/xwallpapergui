@@ -113,8 +113,12 @@ class ScreenItem(QtWidgets.QGraphicsPixmapItem):
         r = self.orig_rect
         return f"{int(r.width())}x{int(r.height())}+{int(r.x())}+{int(r.y())}"
     
+    
+    def monitor_name(self):
+        return f"{self.manufacturer()} {self.model()} SN.{self.serialNumber()} @ {self.name()}"
+
     def tostring(self):
-        return f"#{self.number}: {self.manufacturer()} {self.model()} SN.{self.serialNumber()} @ {self.name()}: {self.geometry_str()}"
+        return f"#{self.number}: {self.monitor_name()}: {self.geometry_str()}"
 
     def mousePressEvent(self, ev):
         super().mousePressEvent(ev)
@@ -293,7 +297,7 @@ class GUI(QtWidgets.QMainWindow):
         self.current_config_combo = QtWidgets.QComboBox(self)
         for cfg in Config.list_from_settings(self.settings):
             self.current_config_combo.addItem(cfg.displayed_name(), cfg.id)
-        topbar_layout.addWidget(self.current_config_combo)
+        topbar_layout.addWidget(self.current_config_combo, True)
 
         rename_button = QtWidgets.QPushButton("Rename", self)
         rename_button.clicked.connect(self._on_rename_config)
@@ -409,8 +413,10 @@ class GUI(QtWidgets.QMainWindow):
             self.text_items.append(text_item)
 
     def _display_selected_screen(self, screen_item):
-        r = screen_item.geometry()
-        self.selected_screen_label.setText(f"Screen #{screen_item.number}, position: {int(r.x())}, {int(r.y())}, size: {int(r.width())} x {int(r.height())}. Path: {screen_item.path}")
+        text = f"""<b>Selected screen</b>: Xinerama ID #{screen_item.number}, geometry: {screen_item.geometry_str()}.<br>
+        <b>Monitor</b>: {screen_item.monitor_name()}<br>
+        <b>Wallpaper</b>: {screen_item.path}"""
+        self.selected_screen_label.setText(text)
 
     def _on_screen_clicked(self, screen_item):
         self._display_selected_screen(screen_item)
