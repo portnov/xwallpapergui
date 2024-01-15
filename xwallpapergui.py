@@ -270,12 +270,19 @@ class Config:
     def list_from_settings(settings):
         prefix = "config_"
         prefix_len = len(prefix)
+        configs = []
+        current_config = Config.new()
+        ids = set()
         for key in settings.childGroups():
             if not key.startswith(prefix):
                 continue
             id = key[prefix_len:]
+            ids.add(id)
             config = Config.from_settings(settings, id)
-            yield config
+            configs.append(config)
+        if not configs or current_config.id not in ids:
+            configs.append(current_config)
+        return configs
     
     def save(self, settings):
         section = f"config_{self.id}"
@@ -402,7 +409,7 @@ class GUI(QtWidgets.QMainWindow):
         key = self.selected_screen_key
         print(f"{key} :=> {path}")
         self.screen_items[key].path = path
-        self.text_items[key].setPlainText(f"{key}: {basename(path)}")
+        self.text_items[key].setPlainText(f"{self.screen_items[key].name()}: {basename(path)}")
 
     def _on_browse_selected(self, button):
         if self.selected_screen_key is None:
