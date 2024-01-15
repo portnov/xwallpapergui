@@ -355,18 +355,19 @@ class GUI(QtWidgets.QMainWindow):
 
         path_layout = QtWidgets.QHBoxLayout()
         self.path_label = QtWidgets.QLabel(self)
-        path_layout.addWidget(self.path_label, True)
+        path_layout.addWidget(self.path_label, False, QtCore.Qt.AlignLeft)
 
         self.browse_button = QtWidgets.QPushButton("Browse...", self)
         self.browse_button.clicked.connect(self._on_browse_selected)
         self.browse_button.setEnabled(False)
-        path_layout.addWidget(self.browse_button)
+        path_layout.addWidget(self.browse_button, False, QtCore.Qt.AlignLeft)
+        path_layout.addStretch()
 
         bottombar_layout.addLayout(path_layout)
 
         mode_layout = QtWidgets.QHBoxLayout()
         mode_label = QtWidgets.QLabel("<b>Mode</b>:", self)
-        mode_layout.addWidget(mode_label)
+        mode_layout.addWidget(mode_label, False, QtCore.Qt.AlignLeft)
 
         self.mode_combo = QtWidgets.QComboBox(self)
         self.mode_combo.addItem("Maximize", "--maximize")
@@ -377,7 +378,8 @@ class GUI(QtWidgets.QMainWindow):
         self.mode_combo.setCurrentIndex(0)
         self.mode_combo.currentIndexChanged.connect(self._on_select_mode)
         self.mode_combo.setEnabled(False)
-        mode_layout.addWidget(self.mode_combo)
+        mode_layout.addWidget(self.mode_combo, False, QtCore.Qt.AlignLeft)
+        mode_layout.addStretch()
 
         bottombar_layout.addLayout(mode_layout)
 
