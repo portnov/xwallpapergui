@@ -5,6 +5,8 @@ xwallpapergui README
 [xwallpaper](https://github.com/stoeckmann/xwallpaper) utility, aimed to
 simplify management of wallpapers in multimonitor setups.
 
+![Screenshot_20240117_182149-1](https://github.com/portnov/xwallpapergui/assets/284644/0340f57f-6742-4ff9-8ac1-9ba616c9e29f)
+
 It is intended for the following usecases:
 
 * You use a laptop as a workstation, and sometimes you want to use laptop's
