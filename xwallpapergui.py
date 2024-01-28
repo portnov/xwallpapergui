@@ -222,13 +222,14 @@ class Config:
         return cfg
     
     @staticmethod
-    def current_from_settings(settings):
+    def current_from_settings(settings, verbose=False):
         empty_config = Config.new()
         section = f"config_{empty_config.id}"
         #print("current config id", empty_config.id)
         name = settings.value(f"{section}/name")
         if not name:
-            print(f"loading new config, name={empty_config.name}")
+            if verbose:
+                print(f"Creating new config: {name}")
             return empty_config
         else:
             return Config.from_settings(settings, empty_config.id)
@@ -305,7 +306,7 @@ class Config:
             #print(f"W: {screen.name()} => {screen.path}, {screen.mode}")
         settings.endArray()
 
-    def apply(self):
+    def apply(self, verbose=False):
         args = []
         for screen in self.screens:
             args.append("--output")
@@ -314,13 +315,15 @@ class Config:
             args.append('"'+screen.path+'"')
         all_args = " ".join(args)
         command = f"xwallpaper {all_args}"
-        print(command)
+        if verbose:
+            print(command)
         subprocess.call(command, shell=True)
 
 class GUI(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, args):
         super().__init__()
-        self.settings = QtCore.QSettings("xwallpapergui", "xwallpapergui")
+        self.settings = mk_qsettings(args)
+        self.verbose = args.verbose
         self.scene = ScreensScene()
         self.graphics_view = ScreensView(self.scene, self)
         self.main_widget = QtWidgets.QWidget(self)
@@ -432,7 +435,7 @@ class GUI(QtWidgets.QMainWindow):
         self._display_selected_screen(screen_item)
 
     def _on_apply(self, button):
-        self.selected_config.apply()
+        self.selected_config.apply(self.verbose)
 
     def _on_select_mode(self):
         if self._mask_select_mode:
@@ -468,7 +471,7 @@ class GUI(QtWidgets.QMainWindow):
         self.load_config(config)
 
     def get_current_config(self):
-        return Config.current_from_settings(self.settings)
+        return Config.current_from_settings(self.settings, self.verbose)
     
     def load_config(self, config):
         self.selected_config = config
@@ -509,15 +512,24 @@ class GUI(QtWidgets.QMainWindow):
             self.browse_button.setEnabled(False)
             self.selected_screen_key = None
 
-def launch_gui():
+def launch_gui(args):
     app = QtWidgets.QApplication(sys.argv)
-    win = GUI()
+    win = GUI(args)
     win.show()
     sys.exit(app.exec_())
+
+def mk_qsettings(args):
+    if args.config:
+        config = abspath(args.config[0])
+        return QtCore.QSettings(config, QtCore.QSettings.Format.NativeFormat)
+    else:
+        return QtCore.QSettings("xwallpapergui", "xwallpapergui")
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(prog="xwallpapergui", description="Manipulate wallpapers in multimonitor configurations using xwallpaper")
+    parser.add_argument('-c', '--config', metavar='XWALLPAPERGUI.CONF', help = "Specify custom path to configuration file")
+    parser.add_argument('-v', '--verbose', action='store_true', help = "Be verbose")
     subparsers = parser.add_subparsers(title="Action to be executed", dest="command")
     parser_apply = subparsers.add_parser("apply", help="Apply wallpapers from saved configuration")
     parser_apply.add_argument('-i', '--id', metavar="ID", help="Apply wallpapers from specified configuration")
@@ -526,22 +538,22 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     if args.command is None or args.command == "gui":
-        launch_gui()
+        launch_gui(args)
     elif args.command == "apply":
         app = QtWidgets.QApplication(sys.argv)
-        settings = QtCore.QSettings("xwallpapergui", "xwallpapergui")
+        settings = mk_qsettings(args)
         if args.id is None:
-            config = Config.current_from_settings(settings)
+            config = Config.current_from_settings(settings, args.verbose)
         else:
             config = Config.from_settings(settings, args.id)
             if config is None:
                 print(f"No configuration with such ID: {args.id}")
                 sys.exit(1)
-        config.apply()
+        config.apply(args.verbose)
     elif args.command == "list":
         app = QtWidgets.QApplication(sys.argv)
-        settings = QtCore.QSettings("xwallpapergui", "xwallpapergui")
-        current_config = Config.current_from_settings(settings)
+        settings = mk_qsettings(args)
+        current_config = Config.current_from_settings(settings, args.verbose)
         for config in Config.list_from_settings(settings):
             if config.id == current_config.id:
                 selected = "[*] "
