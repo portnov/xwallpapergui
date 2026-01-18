@@ -456,6 +456,7 @@ class GUI(QtWidgets.QMainWindow):
             return
         path = QtWidgets.QApplication.clipboard().text()
         self._on_select_image(path)
+        self._show_path(path)
 
     def _on_apply(self, button):
         self.selected_config.apply(self.verbose)
@@ -513,11 +514,14 @@ class GUI(QtWidgets.QMainWindow):
         self.mode_combo.setEnabled(False)
         self._enable_set_path(False)
 
+    def _show_path(self, path):
+        self.path_label.setText(f"<b>Wallpaper</b>: {path}")
+
     def _display_selected_screen(self, screen_item):
         text = f"""<b>Selected screen</b>: geometry: {screen_item.geometry_str()}.<br>
         <b>Monitor</b>: {screen_item.monitor_name()}"""
         self.selected_screen_label.setText(text)
-        self.path_label.setText(f"<b>Wallpaper</b>: {screen_item.path}")
+        self._show_path(screen_item.path)
 
     def _on_screen_clicked(self, screen_item):
         self._display_selected_screen(screen_item)
