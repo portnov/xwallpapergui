@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import sys
-from os.path import basename
+from os.path import basename, abspath
 from hashlib import md5
 import subprocess
 import argparse
@@ -362,8 +362,14 @@ class GUI(QtWidgets.QMainWindow):
 
         self.browse_button = QtWidgets.QPushButton("Browse...", self)
         self.browse_button.clicked.connect(self._on_browse_selected)
-        self.browse_button.setEnabled(False)
+        self.copy_button = QtWidgets.QPushButton("Copy", self)
+        self.copy_button.clicked.connect(self._on_copy_path)
+        self.paste_button = QtWidgets.QPushButton("Paste", self)
+        self.paste_button.clicked.connect(self._on_paste_path)
+        self._enable_set_path(False)
         path_layout.addWidget(self.browse_button, False, QtCore.Qt.AlignLeft)
+        path_layout.addWidget(self.copy_button, False, QtCore.Qt.AlignLeft)
+        path_layout.addWidget(self.paste_button, False, QtCore.Qt.AlignLeft)
         path_layout.addStretch()
 
         bottombar_layout.addLayout(path_layout)
@@ -402,6 +408,11 @@ class GUI(QtWidgets.QMainWindow):
         self.scene.screenDoubleClicked.connect(self._on_browse_screen)
         self.scene.imageDropped.connect(self._on_image_dropped)
 
+    def _enable_set_path(self, value):
+        self.browse_button.setEnabled(value)
+        self.copy_button.setEnabled(value)
+        self.paste_button.setEnabled(value)
+
     def _save_settings(self):
         self.selected_config.save(self.settings)
         self.settings.sync()
@@ -433,6 +444,18 @@ class GUI(QtWidgets.QMainWindow):
         self.selected_screen_key = screen_item.hashkey()
         self._on_select_image(path)
         self._display_selected_screen(screen_item)
+
+    def _on_copy_path(self, button):
+        if self.selected_screen_key is None:
+            return
+        path = self.screen_items[self.selected_screen_key].path
+        QtWidgets.QApplication.clipboard().setText(path)
+
+    def _on_paste_path(self, button):
+        if self.selected_screen_key is None:
+            return
+        path = QtWidgets.QApplication.clipboard().text()
+        self._on_select_image(path)
 
     def _on_apply(self, button):
         self.selected_config.apply(self.verbose)
@@ -488,7 +511,7 @@ class GUI(QtWidgets.QMainWindow):
             text_item.setPos(screen_item.rect().topLeft())
             self.text_items[screen_item.hashkey()] = text_item
         self.mode_combo.setEnabled(False)
-        self.browse_button.setEnabled(False)
+        self._enable_set_path(False)
 
     def _display_selected_screen(self, screen_item):
         text = f"""<b>Selected screen</b>: geometry: {screen_item.geometry_str()}.<br>
@@ -502,7 +525,7 @@ class GUI(QtWidgets.QMainWindow):
         #print(f"Screen clicked: {screen_item.name()}, {screen_item.path}, {screen_item.mode}")
         self._set_selected_mode(screen_item.mode)
         self.mode_combo.setEnabled(True)
-        self.browse_button.setEnabled(True)
+        self._enable_set_path(True)
 
     def _on_scene_clicked(self):
         selected = self.scene.selectedItems()
